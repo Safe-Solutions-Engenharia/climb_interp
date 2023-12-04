@@ -10,6 +10,7 @@ from interpolation import ClimbInterp
 import random
 
 if __name__ == "__main__":
+    random.seed(69)
     random_numbers_x = random.sample(range(1, 51), 50)
     random_numbers_y = random.sample(range(1, 51), 50)
     arrange_data = ArrangeData(random_numbers_x, random_numbers_y)
