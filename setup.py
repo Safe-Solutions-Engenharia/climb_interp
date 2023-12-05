@@ -1,7 +1,7 @@
 from distutils.core import setup
 setup(
   name = 'climb_interp',
-  packages = ['climb_interp'],
+  packages = ['files'],
   version = '0.1',
   license='MIT',
   description = 'Complex explosion and flammable data interpolation!',
