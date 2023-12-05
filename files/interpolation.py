@@ -1,3 +1,4 @@
+# Importing all the extern packages we need.
 from scipy import optimize
 import numpy as np
 import matplotlib.pyplot as plt
@@ -387,19 +388,49 @@ class ClimbInterp:
             return self._fit_curve_for_single_point(x, y)
 
         for index in range(len(x) - 1):
-            x_fake, y_fake = x[:index + 2], y[:index + 2]
-            x_fake, y_fake, popt, is_line = self._fit_curve_and_evaluate(x_fake, y_fake)
+            try:
+                x_fake, y_fake = x[:index + 2], y[:index + 2]
+                x_fake, y_fake, popt, is_line = self._fit_curve_and_evaluate(x_fake, y_fake)
+                fitted_y = Functions.exp(x_fake, *popt)
+                
+                # Cálculo do R²
+                r_squared_value = Functions.r_squared(y_fake, fitted_y)
 
-            if len(x) == 2:
-                return x_fake, y_fake, popt, is_line
+                if len(x) == 2:
+                    return x_fake, y_fake, popt, is_line
 
-            # Tenta incluir o próximo ponto e avaliar novamente
-            if index + 3 <= len(x):
-                x_new, y_new = x[:index + 3], y[:index + 3]
-                x_new, y_new, popt_new, is_line_new = self._fit_curve_and_evaluate(x_new, y_new)
+                try:
+                    x_new, y_new = x[0:index + 3], y[0:index + 3]
 
-                if not is_line_new and not is_line:
+                    popt_new, pcov_new = optimize.curve_fit(Functions.exp, x_new, y_new, maxfev=10000)
+                    fitted_y_new = Functions.exp(x_new, *popt_new)
+
+                    # Cálculo do R²
+                    r_squared_value2 = Functions.r_squared(y_new, fitted_y_new)
+
+                    if abs(r_squared_value - r_squared_value2) < 0.1 and len(x) >= index + 3:
+                        continue
+                    elif r_squared_value < 0 and r_squared_value2 < 0:
+                        popt, pcov = optimize.curve_fit(Functions.exception_linear, [0, x_fake[0]], [0, y_fake[0]])
+                        return [0, x_fake[0]], [0, y_fake[0]], popt, True
+                    elif r_squared_value > 0:
+                        return x_fake, y_fake, popt, False
+
+                except Exception as e:
+                    logging.warning(e)
                     return x_fake, y_fake, popt, False
+            except Exception as e:
+                logging.warning(e)
+                if 'x_new' in locals() and 'y_new' in locals():
+                    return x_new, y_new, popt_new, False
+                elif index == 0:
+                    x_fake_with_origin = [0] + x_fake
+                    y_fake_with_origin = [0] + y_fake
+                    popt, pcov = optimize.curve_fit(self._exception_linear, x_fake_with_origin, y_fake_with_origin,
+                                                    maxfev=10000)
+                    return x_fake, y_fake, popt, True
+            
+            
 
         return x, y, popt, False
 
