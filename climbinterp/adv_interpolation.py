@@ -361,7 +361,7 @@ class ClimbInterp:
 
                         if np.all(np.round(ar_y, 0) <= np.round(line, 0)):
                             fitted_y_ar = self._linear(ar_x_sorted, m, b)
-                            r_squared = _r_squared(ar_y_sorted, fitted_y_ar)
+                            r_squared = self._r_squared(ar_y_sorted, fitted_y_ar)
 
                             if r_squared > best_fit_r_squared:
                                 best_fit_r_squared = r_squared

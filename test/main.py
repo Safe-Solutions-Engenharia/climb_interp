@@ -3,7 +3,7 @@ import os
 import sys
 
 current_dir = os.path.dirname(os.path.abspath(__file__))
-module_path = os.path.join(current_dir, '..', 'files')
+module_path = os.path.join(current_dir, '..', 'climbinterp')
 sys.path.append(module_path)
 
 # Importing our modules

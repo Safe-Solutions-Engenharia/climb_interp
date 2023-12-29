@@ -1,0 +1,13 @@
+LICENSE.txt
+MANIFEST.in
+README.md
+pyproject.toml
+setup.py
+climbinterp/__init__.py
+climbinterp/adv_interpolation.py
+climbinterp/data_arrange.py
+climbinterp.egg-info/PKG-INFO
+climbinterp.egg-info/SOURCES.txt
+climbinterp.egg-info/dependency_links.txt
+climbinterp.egg-info/requires.txt
+climbinterp.egg-info/top_level.txt
