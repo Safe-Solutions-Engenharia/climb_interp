@@ -9,6 +9,7 @@ import logging
 warnings.filterwarnings("ignore")
 
 #TODO problemas: No caso onde a distância entre os pontos da curva exponencial é muito grande, o fit é esquisito;
+# noinspection PyTupleAssignmentBalance
 class ClimbInterp:
     
     """
@@ -390,51 +391,46 @@ class ClimbInterp:
         for index in range(len(x) - 1):
             try:
                 x_fake, y_fake = x[:index + 2], y[:index + 2]
-                x_fake, y_fake, popt, is_line = self._fit_curve_and_evaluate(x_fake, y_fake)
+                popt, is_line, r_squared_value = self._fit_curve_and_evaluate(x_fake, y_fake, index)
                 fitted_y = Functions.exp(x_fake, *popt)
-                
-                # Cálculo do R²
-                r_squared_value = Functions.r_squared(y_fake, fitted_y)
 
-                if len(x) == 2:
+                if len(x) == 2 or is_line:
                     return x_fake, y_fake, popt, is_line
 
                 try:
-                    x_new, y_new = x[0:index + 3], y[0:index + 3]
+                    x_new, y_new = x[:index + 3], y[:index + 3]
 
-                    popt_new, pcov_new = optimize.curve_fit(Functions.exp, x_new, y_new, maxfev=10000)
-                    fitted_y_new = Functions.exp(x_new, *popt_new)
+                    popt_new, _, r_squared_value_2 = self._fit_curve_and_evaluate(x_new, y_new, index)
 
-                    # Cálculo do R²
-                    r_squared_value2 = Functions.r_squared(y_new, fitted_y_new)
-
-                    if abs(r_squared_value - r_squared_value2) < 0.1 and len(x) >= index + 3:
+                    if abs(r_squared_value - r_squared_value_2) < 0.1 and len(x) >= index + 3 and index != len(x) + 1:
                         continue
-                    elif r_squared_value < 0 and r_squared_value2 < 0:
-                        popt, pcov = optimize.curve_fit(Functions.exception_linear, [0, x_fake[0]], [0, y_fake[0]])
-                        return [0, x_fake[0]], [0, y_fake[0]], popt, True
-                    elif r_squared_value > 0:
-                        return x_fake, y_fake, popt, False
+                    elif r_squared_value < 0 and r_squared_value_2 < 0:
+                        return self._fit_curve_for_single_point(x, y)
+                    elif r_squared_value > 0 or is_line:
+                        return x_fake, y_fake, popt, is_line
 
                 except Exception as e:
                     logging.warning(e)
-                    return x_fake, y_fake, popt, False
+                    return x_fake, y_fake, popt, is_line
             except Exception as e:
-                logging.warning(e)
                 if 'x_new' in locals() and 'y_new' in locals():
                     return x_new, y_new, popt_new, False
-                elif index == 0:
-                    x_fake_with_origin = [0] + x_fake
-                    y_fake_with_origin = [0] + y_fake
-                    popt, pcov = optimize.curve_fit(self._exception_linear, x_fake_with_origin, y_fake_with_origin,
-                                                    maxfev=10000)
-                    return x_fake, y_fake, popt, True
-            
-            
+                elif index != 0:
+                    x_fake, y_fake = x[:index - 2], y[:index - 2]
+                    popt, is_line, r_squared_value = self._fit_curve_and_evaluate(x_fake, y_fake, True)
+                    fitted_y = Functions.exp(x_fake, *popt)
+                    return x_fake, y_fake, popt, is_line
+                else:
+                    x_fake_with_origin = [0] + x[:index + 2]
+                    y_fake_with_origin = [0] + y[:index + 2]
+                    popt, pcov = optimize.curve_fit(
+                        Functions.exception_linear, x_fake_with_origin, y_fake_with_origin,
+                        maxfev=10000
+                    )
+                    return x[:index + 2], y[:index + 2], popt, True
 
-        return x, y, popt, False
-
-    def _fit_curve_for_single_point(self, x, y):
+    @staticmethod
+    def _fit_curve_for_single_point(x, y):
 
         """
         Realiza um ajuste de curva para um único ponto.
@@ -443,11 +439,14 @@ class ClimbInterp:
         :param y: Lista com um valor y.
         :return: x, y, parâmetros otimizados e um indicador se é uma linha.
         """
+        x_linear = [0, x[0]]
+        y_linear = [0, y[0]]
 
-        popt, _ = optimize.curve_fit(Functions.exception_linear, [0, x[0]], [0, y[0]])
+        popt, _ = optimize.curve_fit(Functions.exception_linear, x_linear, y_linear)
         return x, y, popt, True
 
-    def _fit_curve_and_evaluate(self, x, y):
+    @staticmethod
+    def _fit_curve_and_evaluate(x, y, iteration):
 
         """
         Realiza o ajuste da curva e avalia a qualidade do ajuste usando R².
@@ -457,14 +456,16 @@ class ClimbInterp:
         :return: x, y, parâmetros otimizados e um indicador se é uma linha, baseado no R².
         """
 
-        try:
-            popt, _ = optimize.curve_fit(Functions.exp, x, y, maxfev=10000)
-            fitted_y = Functions.exp(x, *popt)
-            r_squared_value = Functions.r_squared(y, fitted_y)
-            return x, y, popt, r_squared_value < 0
-        except Exception as e:
-            logging.warning(e)
-            return x, y, None, False
+        is_linear = False
+        popt, _ = optimize.curve_fit(Functions.exp, x, y, maxfev=10000)
+        fitted_y = Functions.exp(x, *popt)
+        r_squared_value = Functions.r_squared(y, fitted_y)
+
+        if r_squared_value < 0 and not iteration:
+            popt, _ = optimize.curve_fit(Functions.exception_linear, x, y, maxfev=10000)
+            is_linear = True
+
+        return popt, is_linear, r_squared_value
 
     def _arrange_graph_variables(self):
 
@@ -547,6 +548,7 @@ class ClimbInterp:
         """
 
         return self.popt_exp, self.intersection, self.popt_linear, self.is_linear, self.is_logarithmic
+
 
 class Functions:
 
