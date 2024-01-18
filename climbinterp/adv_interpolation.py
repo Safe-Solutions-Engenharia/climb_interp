@@ -378,26 +378,46 @@ class ClimbInterp:
     def _get_lower_error(self, x, y):
 
         """
-        Determina o ajuste de curva com menor erro para um conjunto de pontos.
-
-        :param x: Lista de valores x.
-        :param y: Lista de valores y.
-        :return: Conjunto de pontos otimizado, parâmetros da curva e se a curva é uma linha.
+        Determine the curve fit with the lowest error for a set of points.
+        :param x: List of x values.
+        :param y: List of y values.
+        :return: Optimized set of points, curve parameters, and whether the curve is a line.
         """
+
 
         if len(x) == 1:
             return self._fit_curve_for_single_point(x, y)
 
         for index in range(len(x) - 1):
-            try:
-                x_fake, y_fake = x[:index + 2], y[:index + 2]
-                popt, is_line, r_squared_value = self._fit_curve_and_evaluate(x_fake, y_fake, index)
-                fitted_y = Functions.exp(x_fake, *popt)
+            x_subset, y_subset = x[:index + 2], y[:index + 2]
+            result = self._fit_curve_and_evaluate(x_subset, y_subset, index)
 
-                if len(x) == 2 or is_line:
-                    return x_fake, y_fake, popt, is_line
+            if not result:
+                return x_subset, y_subset, popt, is_line
 
-                try:
+            popt, is_line, r_squared = result
+
+            if len(x) == 2 or is_line:
+                return x_subset, y_subset, popt, is_line
+
+            if index + 2 < len(x):
+                xx_subset = x[:index + 3]
+                yy_subset = y[:index + 3]
+                result_next = self._fit_curve_and_evaluate(xx_subset, yy_subset, index + 1)
+                if result_next is None:
+                    return x_subset, y_subset, popt, is_line
+
+                popt_next, is_line_next, r_squared_next = result_next
+                if self._significant_change(r_squared, r_squared_next) and (len(x) >= index + 3) and (index != len(x) - 1):
+                    continue
+                elif is_line and is_line_next:
+                    return self._fit_curve_for_single_point(x, y)
+                else:
+                    return x_subset, y_subset, popt, is_line
+            else:
+                return x_subset, y_subset, popt, is_line
+
+                '''try:
                     x_new, y_new = x[:index + 3], y[:index + 3]
 
                     popt_new, _, r_squared_value_2 = self._fit_curve_and_evaluate(x_new, y_new, index)
@@ -410,7 +430,6 @@ class ClimbInterp:
                         return x_fake, y_fake, popt, is_line
 
                 except Exception as e:
-                    logging.warning(e)
                     return x_fake, y_fake, popt, is_line
             except Exception as e:
                 if 'x_new' in locals() and 'y_new' in locals():
@@ -427,7 +446,11 @@ class ClimbInterp:
                         Functions.exception_linear, x_fake_with_origin, y_fake_with_origin,
                         maxfev=10000
                     )
-                    return x[:index + 2], y[:index + 2], popt, True
+                    return x[:index + 2], y[:index + 2], popt, True'''
+
+    @staticmethod
+    def _significant_change(r1, r2, threshold=0.1):
+        return abs(r1 - r2) <= threshold
 
     @staticmethod
     def _fit_curve_for_single_point(x, y):
@@ -447,6 +470,38 @@ class ClimbInterp:
 
     @staticmethod
     def _fit_curve_and_evaluate(x, y, iteration):
+        """
+        Try to perform curve fitting and evaluate, handling any exceptions.
+        :param x: List of x values.
+        :param y: List of y values.
+        :return: Tuple of (optimized parameters, line indicator, R²) or None if an exception occurs.
+        """
+
+        try:
+            popt, _ = optimize.curve_fit(Functions.exp, x, y, maxfev=10000)
+            fitted_y = Functions.exp(x, *popt)
+            r_squared = Functions.r_squared(y, fitted_y)
+            is_linear = r_squared < 0
+
+            if is_linear and not iteration:
+                try:
+                    popt, _ = optimize.curve_fit(Functions.exception_linear, x, y, maxfev=10000)
+                except Exception as e:
+                    raise ValueError("Failed to fit initial curve.") from e
+            elif is_linear:
+                return None
+
+            return popt, is_linear, r_squared
+
+        except Exception as e:
+            if not iteration:
+                try:
+                    popt, _ = optimize.curve_fit(Functions.exception_linear, x, y, maxfev=10000)
+                    return popt, True, None
+                except Exception as e:
+                    raise ValueError("Failed to fit initial curve.") from e
+
+            return None
 
         """
         Realiza o ajuste da curva e avalia a qualidade do ajuste usando R².
